@@ -3,321 +3,449 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2025 WSOP SC Cyprus 인터랙티브 대시보드 v2</title>
+    <title>인터랙티브 물류 이동 지도 (타임라인 버전)</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap">
-    <!-- Chosen Palette: Slate & Sky -->
-    <!-- Application Structure Plan: 프로젝트 전체를 조망하는 '대시보드' 형태로 정보 아키텍처를 재설계했습니다. 핵심 지표, 지휘부 조직도, 현장 워크플로우, 데이터 흐름, 외부 협력 파트 등 4개의 핵심 섹션으로 구성됩니다. 사용자는 각 섹션의 인터랙티브 카드를 통해 필요한 정보에 즉시 접근할 수 있습니다. 이 구조는 복잡한 프로덕션 정보를 계층적으로 분리하여 사용자의 인지 부하를 줄이고, 프로젝트의 전체적인 그림을 직관적으로 이해하도록 돕습니다. -->
-    <!-- Visualization & Content Choices: 보고서 정보: 팀/역할 -> 목표: R&R 명확화 -> 표현 방식: 인터랙티브 조직도(HTML/CSS/JS) -> 상호작용: 클릭 시 상세 역할 표시. 보고서 정보: 워크플로우 -> 목표: 프로세스 시각화 -> 표현 방식: 아이콘 카드 그리드 -> 상호작용: 클릭 시 단계별 프로세스를 담은 모달 표시. 보고서 정보: 데이터 흐름 -> 목표: 정보 전달 경로 이해 -> 표현 방식: 시각적 다이어그램(HTML/CSS) -> 상호작용: 정적 흐름도. 모든 요소는 텍스트 의존도를 최소화하고 시각적, 인터랙티브한 이해를 극대화하는 데 초점을 맞췄습니다. -->
-    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Noto Sans KR', sans-serif; background-color: #f1f5f9; }
-        .dashboard-card { transition: all 0.3s ease; background-color: white; }
-        .dashboard-card:hover { transform: translateY(-4px); box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1); }
-        .modal { display: none; transition: opacity 0.3s ease; }
-        .modal.active { display: flex; }
-        .modal-content-box { transform: scale(0.95); opacity: 0; transition: all 0.3s ease; }
-        .modal.active .modal-content-box { transform: scale(1); opacity: 1; }
-        .org-item-details { max-height: 0; overflow: hidden; transition: max-height 0.5s ease-in-out; }
-        .step-connector::after { content: ''; position: absolute; left: 1.25rem; top: 3rem; bottom: -1rem; width: 2px; background-color: #e2e8f0; z-index: 0; }
-        .step-item:last-child .step-connector::after { display: none; }
-        .op-map-node { transition: all 0.2s ease-in-out; }
-        .op-map-node:hover { transform: scale(1.05); z-index: 10; }
-        .detail-tab { cursor: pointer; }
-        .detail-tab.active { border-color: #0ea5e9; background-color: #e0f2fe; color: #0369a1; }
-        .detail-content { display: none; }
-        .detail-content.active { display: block; }
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f3f4f6;
+            overflow-x: hidden;
+        }
+        .step {
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+        }
+        .step.active .step-circle {
+            background-color: #1e40af;
+            color: white;
+            transform: scale(1.1);
+        }
+        .step.active .step-label {
+            color: #1e40af;
+            font-weight: 700;
+        }
+        .step-line {
+            height: 2px;
+            background-color: #d1d5db;
+            flex-grow: 1;
+        }
+        .logistics-card {
+            transition: opacity 0.3s ease-in-out;
+        }
+        .line-connector {
+            position: absolute;
+            background-color: #fbbf24;
+            height: 3px;
+            transform-origin: 0 0;
+            z-index: 10;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .line-connector::after {
+            content: '';
+            position: absolute;
+            right: -8px;
+            top: -3.5px;
+            width: 0;
+            height: 0;
+            border-top: 5px solid transparent;
+            border-bottom: 5px solid transparent;
+            border-left: 8px solid #fbbf24;
+        }
+        .highlight-item {
+            background-color: #fef3c7;
+            font-weight: 700;
+            color: #92400e;
+            border-radius: 0.25rem;
+            margin: -2px -6px;
+            padding: 2px 6px;
+            display: inline-block;
+            width: calc(100% + 12px);
+        }
     </style>
 </head>
-<body class="text-slate-800">
+<body class="text-gray-800">
+
+    <div id="line-container" class="absolute top-0 left-0 w-full h-full pointer-events-none hidden md:block"></div>
 
     <div class="container mx-auto p-4 md:p-8">
-        <header class="text-center mb-12">
-            <h1 class="text-4xl md:text-5xl font-bold text-slate-900">WSOP SC Cyprus: Production Dashboard</h1>
-            <p class="text-xl text-slate-500 mt-2">프로덕션 기획서</p>
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold mb-2">인터랙티브 물류 타임라인</h1>
+            <p class="text-gray-600">단계별 재고 현황과 이동 경로를 한눈에 파악해 보세요.</p>
         </header>
 
-        <main class="space-y-12">
-            <!-- Section 1: Project Command -->
-            <section>
-                <h2 class="text-2xl font-bold text-slate-800 mb-6 border-l-4 border-sky-500 pl-4">프로젝트 지휘부</h2>
-                <div class="dashboard-card rounded-xl shadow-lg p-6">
-                    <div id="org-chart" class="space-y-4">
-                        <!-- Org chart will be rendered by JS -->
-                    </div>
-                </div>
-            </section>
-
-            <!-- Section 2: On-Site Operations -->
-            <section>
-                <h2 class="text-2xl font-bold text-slate-800 mb-6 border-l-4 border-sky-500 pl-4">현장 오퍼레이션 워크플로우</h2>
-                <div class="dashboard-card rounded-xl shadow-lg p-6">
-                    <p class="text-center text-slate-500 mb-6">아래 오퍼레이션 맵의 각 노드를 클릭하여 상세 워크플로우를 확인하세요.</p>
-                    <div id="workflow-map" class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        <!-- Workflow Map will be rendered here -->
-                    </div>
-                </div>
-            </section>
-            
-            <!-- Section 3: Data & Comms -->
-            <section>
-                <h2 class="text-2xl font-bold text-slate-800 mb-6 border-l-4 border-sky-500 pl-4">데이터 & 커뮤니케이션</h2>
-                <div class="grid md:grid-cols-2 gap-6">
-                    <div class="dashboard-card rounded-xl shadow-lg p-6">
-                        <h3 class="font-bold text-xl mb-4 text-slate-900">데이터 흐름</h3>
-                        <div class="space-y-2 text-sm">
-                            <div class="flex items-center gap-2 p-2 bg-slate-50 rounded-md">
-                                <span class="text-lg">📈</span>
-                                <span>WSOP+ 기반 데이터</span>
-                                <span class="text-sky-500 font-bold mx-2">→</span>
-                                <span class="text-lg">🏢</span>
-                                <span>한국 본사 처리</span>
-                            </div>
-                            <div class="flex items-center justify-center text-2xl text-slate-400">↓</div>
-                             <div class="flex items-center gap-2 p-2 bg-slate-50 rounded-md">
-                                <span class="text-lg">🛰️</span>
-                                <span>현장 실시간 이벤트</span>
-                                <span class="text-sky-500 font-bold mx-2">→</span>
-                                <span class="text-lg">🕵️</span>
-                                <span>Mike Yoo 처리/보고</span>
-                            </div>
-                            <div class="flex items-center justify-center text-2xl text-slate-400">↓</div>
-                            <div class="flex items-center gap-2 p-2 bg-sky-100 text-sky-800 rounded-md">
-                                <span class="text-lg">📊</span>
-                                <span>GFX (JSON) 핸드로그</span>
-                                <span class="text-sky-500 font-bold mx-2">→</span>
-                                <span class="text-lg">🏢</span>
-                                <span>한국 본사 실시간 파악</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="dashboard-card rounded-xl shadow-lg p-6">
-                        <h3 class="font-bold text-xl mb-4 text-slate-900">커뮤니케이션 프로토콜</h3>
-                         <div class="space-y-4">
-                            <div>
-                                <h4 class="font-semibold text-red-600">🚨 긴급 보고</h4>
-                                <p class="text-slate-600 text-sm">버블 파열, 유명 선수 탈락 등 긴급 상황은 WhatsApp을 통해 즉시 <strong class="font-bold">본사 Leo에게 보고</strong></p>
-                            </div>
-                            <div>
-                                <h4 class="font-semibold text-sky-600">💬 실시간 소통 채널 (WhatsApp)</h4>
-                                <p class="text-slate-600 text-sm">각 채널에서는 담당자끼리 실무를 처리하며, 주요 의사결정 및 상황 인지를 위해 <strong class="font-bold">David, Leo, Aiden</strong>이 모든 채널을 모니터링합니다.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-            
-            <!-- Section 4: External Partners & Internal TF -->
-            <section>
-                <h2 class="text-2xl font-bold text-slate-800 mb-6 border-l-4 border-sky-500 pl-4">협력 파트 및 내부 TF</h2>
-                <div id="partners-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                     <!-- Partner cards will be rendered by JS -->
-                </div>
-            </section>
-        </main>
-    </div>
-
-    <!-- Modal -->
-    <div id="modal-container" class="modal fixed inset-0 bg-slate-900 bg-opacity-70 items-center justify-center p-4 z-50" onclick="closeModal()">
-        <div class="modal-content-box bg-slate-50 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
-            <div class="sticky top-0 bg-slate-50/80 backdrop-blur-sm p-6 border-b border-slate-200 flex justify-between items-center z-10">
-                <h2 id="modal-title" class="text-2xl font-bold text-slate-900"></h2>
-                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-800 text-4xl font-light">&times;</button>
+        <!-- Stepper -->
+        <div class="flex items-center justify-center mb-10 w-full max-w-4xl mx-auto">
+            <div id="step-0" class="step active text-center" onclick="showStep(0)">
+                <div class="step-circle w-10 h-10 mx-auto bg-white rounded-full flex items-center justify-center font-bold text-lg border-2 border-gray-300">0</div>
+                <p class="step-label text-xs mt-2">초기 상태</p>
             </div>
-            <div id="modal-content" class="p-8"></div>
+            <div class="step-line"></div>
+            <div id="step-1" class="step text-center" onclick="showStep(1)">
+                <div class="step-circle w-8 h-8 mx-auto bg-white rounded-full flex items-center justify-center font-bold border-2 border-gray-300">→</div>
+                <p class="step-label text-xs mt-2">1단계 이동</p>
+            </div>
+            <div class="step-line"></div>
+            <div id="step-2" class="step text-center" onclick="showStep(2)">
+                <div class="step-circle w-10 h-10 mx-auto bg-white rounded-full flex items-center justify-center font-bold text-lg border-2 border-gray-300">1</div>
+                <p class="step-label text-xs mt-2">1단계 완료</p>
+            </div>
+            <div class="step-line"></div>
+            <div id="step-3" class="step text-center" onclick="showStep(3)">
+                <div class="step-circle w-8 h-8 mx-auto bg-white rounded-full flex items-center justify-center font-bold border-2 border-gray-300">→</div>
+                <p class="step-label text-xs mt-2">2단계 이동</p>
+            </div>
+            <div class="step-line"></div>
+            <div id="step-4" class="step text-center" onclick="showStep(4)">
+                <div class="step-circle w-10 h-10 mx-auto bg-white rounded-full flex items-center justify-center font-bold text-lg border-2 border-gray-300">2</div>
+                <p class="step-label text-xs mt-2">최종 상태</p>
+            </div>
         </div>
+
+        <!-- Desktop View -->
+        <main id="logistics-board" class="hidden md:grid grid-cols-3 gap-6 md:gap-8 min-h-[60vh]">
+            <div id="col-korea" class="bg-white/50 p-4 rounded-xl"><h2 class="text-2xl font-bold text-center mb-6 sticky top-4 bg-white/50 py-2 z-20">🇰🇷 한국</h2><div class="space-y-4"></div></div>
+            <div id="col-cyprus" class="bg-white/50 p-4 rounded-xl"><h2 class="text-2xl font-bold text-center mb-6 sticky top-4 bg-white/50 py-2 z-20">🇨🇾 키프로스</h2><div class="space-y-4"></div></div>
+            <div id="col-prague" class="bg-white/50 p-4 rounded-xl"><h2 class="text-2xl font-bold text-center mb-6 sticky top-4 bg-white/50 py-2 z-20">🇨🇿 프라하</h2><div class="space-y-4"></div></div>
+        </main>
+
+        <!-- Mobile View -->
+        <div id="mobile-logistics-view" class="md:hidden space-y-4"></div>
     </div>
 
     <script>
-        const projectData = {
-            orgChart: [
-                { name: 'David', role: '총괄 디렉터', details: '무대 디자인 최종 컨펌 등 프로젝트의 최종 의사결정' },
-                { name: 'Leo', role: '조감독', details: '총괄 디렉터의 지시를 받아 방송의 전체 구성(오프닝, 클로징, 핸드 순서 등)을 관리하고, 현장팀과의 커뮤니케이션 허브 역할을 수행.' },
-                { name: 'Chris', role: '현장 프로젝트 매니저', details: '현장 물류 및 외부 커뮤니케이션 총괄. 스폰서/파트너사 소통, 장비 운송, 현장 예산 및 스태프 지원 담당.' },
-                { name: 'Aiden', role: '현장 총괄', details: '모든 현장 기술/연출 파트의 업무를 조율하고, 본사 지시를 현장에 적용' },
-            ],
-            workflows: [
-                { id: 'rfid', group: 'Pre-Production & Setup', title: 'RFID 프로필 캡처', icon: '📸', color: 'blue', description: '반자동화 작업을 통해 플레이어 프로필 사진을 GFX와 연동합니다.', details: `<p class="mb-6 text-slate-600">FR7 카메라와 캡처 프로그램을 연동하여 플레이어 프로필 사진을 효율적으로 관리하고 GFX에 자동으로 반영하는 반자동화 프로세스입니다.</p><div class="space-y-6"><div class="step-item relative pl-12"><div class="step-connector"></div><div class="absolute left-0 top-1 w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg z-10">1</div><h4 class="font-bold text-lg text-slate-800">촬영</h4><p class="text-slate-600">FR7으로 각 시트의 플레이어를 순서대로 촬영합니다.</p></div><div class="step-item relative pl-12"><div class="step-connector"></div><div class="absolute left-0 top-1 w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg z-10">2</div><h4 class="font-bold text-lg text-slate-800">캡처 및 명명</h4><p class="text-slate-600">랩탑 캡처 시, 플레이어 번호로 파일명이 자동 지정됩니다.</p></div><div class="step-item relative pl-12"><div class="step-connector"></div><div class="absolute left-0 top-1 w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg z-10">3</div><h4 class="font-bold text-lg text-slate-800">배경 제거</h4><p class="text-slate-600">캡처된 이미지의 배경이 자동으로 제거(누끼 처리)됩니다.</p></div><div class="step-item relative pl-12"><div class="step-connector"></div><div class="absolute left-0 top-1 w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg z-10">4</div><h4 class="font-bold text-lg text-slate-800">자동 이동</h4><p class="text-slate-600">처리된 이미지는 GFX 연동 폴더로 자동 이동됩니다.</p></div><div class="step-item relative pl-12"><div class="absolute left-0 top-1 w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-lg z-10">5</div><h4 class="font-bold text-lg text-slate-800">검수 및 수정</h4><p class="text-slate-600"><strong>Mike Yoo</strong>가 프로세스를 검수하고, 문제 발생 시 <strong>Trey</strong>와 협업하여 처리합니다.</p></div></div>` },
-                { id: 'main_feature', group: 'Main Production', title: '메인 피처 테이블 촬영', icon: '📺', color: 'violet', description: '외주 프로덕션과 협업하여 최고 수준의 메인 방송을 제작합니다.', details: `<p class="mb-6 text-slate-600">전문 외주 프로덕션인 Pokercaster와 긴밀하게 협력하여 메인 피처 테이블의 방송을 제작합니다.</p><div class="space-y-4"><div><strong class="font-semibold text-slate-900">담당:</strong> 외주 프로덕션 (Pokercaster)</div><div><strong class="font-semibold text-slate-900">협업 내용:</strong> 무대 설치, 조명, 케이블, 오디오, 네트워크 등 기술적인 부분 전반을 협업하며, 현장팀은 원활한 진행을 지원합니다.</div></div>` },
-                { id: 'sub_feature', group: 'Main Production', title: '서브 피처 테이블 촬영', icon: '📹', color: 'emerald', description: '메인 테이블 외 주요 테이블의 현장감을 생생하게 전달합니다.', details: `
-                    <p class="mb-6 text-slate-600">메인 피처 테이블 못지않은 흥미로운 핸드와 스토리가 발생하는 서브 피처 테이블의 모든 순간을 담아내는 핵심 촬영 워크플로우입니다. 아래 탭을 클릭하여 담당자별 상세 프로토콜을 확인하세요.</p>
-                    <div class="border-b border-slate-200 mb-4">
-                        <nav class="-mb-px flex space-x-6" id="sub-feature-tabs">
-                            <button data-target="kai" class="detail-tab active whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Kai (총괄)</button>
-                            <button data-target="trey" class="detail-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Trey (스위처)</button>
-                            <button data-target="matthew" class="detail-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Matthew (FR7)</button>
-                        </nav>
-                    </div>
-                    <div id="kai" class="detail-content active">
-                        <h4 class="font-bold text-lg text-emerald-700 mb-2">총괄 및 비주얼 디렉팅</h4>
-                        <ul class="list-disc list-inside space-y-2 text-slate-600">
-                            <li>서브 피처 테이블의 촬영 및 운영 전반을 총괄.</li>
-                            <li>촬영 전, 조명팀과 협력하여 방송의 톤앤매너, 화이트 밸런스, 적정 조도 확보.</li>
-                            <li>Trey(스위처), Matthew(FR7)에게 전체적인 촬영 방향성과 주요 앵글 디렉팅.</li>
-                            <li>프리 캠을 직접 운용하여 현장의 역동적인 스케치 샷 확보.</li>
-                            <li>Aiden으로부터 노터블 플레이어 정보를 전달받아 팀에 전파.</li>
-                        </ul>
-                    </div>
-                    <div id="trey" class="detail-content">
-                        <h4 class="font-bold text-lg text-emerald-700 mb-2">스위칭 및 라이브 디렉팅</h4>
-                        <ul class="list-disc list-inside space-y-2 text-slate-600">
-                            <li>Kai의 전체적인 디렉팅 하에 실시간 카메라 스위칭 담당.</li>
-                            <li>Matthew에게 플레이어 클로즈업, 칩 스택, 핸드 카드 등 구체적인 샷 요청.</li>
-                            <li>핸드의 흐름에 맞춰 역동적이고 몰입감 있는 화면 구성.</li>
-                        </ul>
-                    </div>
-                    <div id="matthew" class="detail-content">
-                        <h4 class="font-bold text-lg text-emerald-700 mb-2">FR7 오퍼레이팅</h4>
-                        <ul class="list-disc list-inside space-y-2 text-slate-600">
-                            <li>Trey의 실시간 디렉션에 따라 FR7 PTZ 카메라 정밀 조작.</li>
-                            <li>안정적이고 부드러운 카메라 무빙(팬, 틸트, 줌) 구사.</li>
-                            <li>플레이어의 표정, 제스처, 칩 액션 등 스토리텔링에 중요한 디테일 포착.</li>
-                            <li>딜러의 핸드, 커뮤니티 카드 등 게임 진행에 필수적인 정보를 명확하게 촬영.</li>
-                        </ul>
-                    </div>
-                ` },
-                { id: 'bubble', group: 'Key Event', title: '버블 촬영', icon: '💥', color: 'red', description: '머니-인 버블의 긴장감 넘치는 순간을 포착하고 기록합니다.', details: `<p class="mb-6 text-slate-600">토너먼트의 가장 극적인 순간 중 하나인 버블 상황을 체계적으로 촬영하고 기록하여, 본사에서 편집점을 쉽게 찾을 수 있도록 지원하는 워크플로우입니다.</p><div class="space-y-6"><div class="step-item relative pl-12"><div class="step-connector"></div><div class="absolute left-0 top-1 w-10 h-10 bg-red-100 text-red-600 rounded-full flex items-center justify-center font-bold text-lg z-10">1</div><h4 class="font-bold text-lg text-slate-800">사전 정보 수집</h4><p class="text-slate-600"><strong>데이터 매니저 (Mike Yoo)</strong>가 버블 임박 시, 올인 가능 플레이어 정보를 WSOP+ 기반으로 수집하여 촬영팀과 본사에 공유합니다.</p></div><div class="step-item relative pl-12"><div class="step-connector"></div><div class="absolute left-0 top-1 w-10 h-10 bg-red-100 text-red-600 rounded-full flex items-center justify-center font-bold text-lg z-10">2</div><h4 class="font-bold text-lg text-slate-800">촬영 및 컷팅</h4><p class="text-slate-600"><strong>카메라 리드 (Kai)</strong>가 버블 핸드 촬영을 지휘하고, <strong>스위처 (Trey)</strong>는 Kai의 리드에 맞춰 편집점(In/Out)을 고려하여 컷팅합니다.</p></div><div class="step-item relative pl-12"><div class="absolute left-0 top-1 w-10 h-10 bg-red-100 text-red-600 rounded-full flex items-center justify-center font-bold text-lg z-10">3</div><h4 class="font-bold text-lg text-slate-800">사후 정보 입력</h4><p class="text-slate-600">올인 싸움 종료 후, <strong>Mike Yoo</strong>가 핸드 상세 정보(카드, 결과)와 탈락자 여부를 즉시 추가 입력하여 본사에 보고합니다.</p></div></div>` },
-                { id: 'thumbnail', group: 'Content Creation', title: '썸네일 촬영', icon: '🖼️', color: 'amber', description: '방송의 첫인상을 결정하는 썸네일용 소스를 확보합니다.', details: `<p class="mb-6 text-slate-600">시청자의 클릭을 유도하는 매력적인 썸네일을 제작하기 위해, 현장의 생생한 순간을 포착하는 워크플로우입니다.</p><div class="space-y-6"><div class="step-item relative pl-12"><div class="step-connector"></div><div class="absolute left-0 top-1 w-10 h-10 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center font-bold text-lg z-10">1</div><h4 class="font-bold text-lg text-slate-800">소스 확보 및 촬영</h4><p class="text-slate-600"><strong>현장 PA (Mike Yoo)</strong>가 플레이어의 극적인 표정, 칩 리더의 모습 등 썸네일용 소스를 직접 촬영 및 처리합니다.</p></div><div class="step-item relative pl-12"><div class="absolute left-0 top-1 w-10 h-10 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center font-bold text-lg z-10">2</div><h4 class="font-bold text-lg text-slate-800">본사 전달</h4><p class="text-slate-600">촬영된 고품질 이미지 또는 영상 클립을 본사 편집팀에 전달합니다.</p></div></div>` },
-                { id: 'social', group: 'Content Creation', title: '소셜 미디어 콘텐츠', icon: '💬', color: 'pink', description: 'WSOP 소셜 미디어 TF와 협력하여 바이럴 콘텐츠를 제작합니다.', details: `<p class="mb-6 text-slate-600">WSOP 소속 TF팀과 협력하여 인스타그램, X 등 소셜 미디어 플랫폼에 최적화된 콘텐츠를 제작하고 확산시킵니다.</p><div class="space-y-4"><div><strong class="font-semibold text-slate-900">담당:</strong> WSOP 소셜 미디어 TF (로라, 커크)</div><div><strong class="font-semibold text-slate-900">협업:</strong> 현장팀은 인터뷰 등 콘텐츠 제작 시 적극적으로 협력하여 시너지를 창출합니다.</div></div>` },
-                { id: 'virtual', group: 'Content Creation', title: '버추얼 테이블 콘텐츠', icon: '🎲', color: 'teal', description: '최소 인원으로 특정 상황을 전달하는 스페셜 콘텐츠를 제작합니다.', details: `<p class="mb-6 text-slate-600">별도의 TF를 구성하여, 특정 컨셉이나 상황에 집중한 실험적이고 창의적인 스페셜 콘텐츠를 제작합니다.</p><div class="space-y-4"><div><strong class="font-semibold text-slate-900">역할:</strong> 1개의 카메라와 최소 인원으로 특정 테이블의 상황을 심도 있게 전달.</div><div><strong class="font-semibold text-slate-900">담당:</strong> 버추얼 테이블 카메라 감독 (TBD), 버추얼 테이블 PD (TBD)</div></div>` }
-            ],
-            partners: [
-                { name: 'WSOP', role: '대회 개최사', details: '토너먼트의 주최 및 전체적인 브랜드 관리.' },
-                { name: 'DTD PLAYER', role: '대회 운영사', details: '토너먼트의 실질적인 운영 및 진행 담당.' },
-                { name: 'Pokercaster', role: '외주 프로덕션', details: '무대 설치, 메인 테이블 조명, 케이블, 오디오, 네트워크 담당' },
-                { name: 'Merit Hotel', role: '베뉴 파트너', details: '무대 베뉴 제공 및 배너 설치 협업' },
-                { name: 'NSUS', role: '기술 지원', details: 'WSOP+ 앱 지원' },
-                { name: 'WSOP Social TF', role: '협력 TF', details: 'WSOP 소속. 담당자(로라, 커크)가 소셜 미디어 콘텐츠 제작' }
-            ]
-        };
+        const initialInventoryData = [
+            // 한국
+            { location: 'korea', name: 'V마운트 배터리', qty: 4 }, { location: 'korea', name: '테라덱 무선 송수신기', qty: 4 }, { location: 'korea', name: 'FR7 컨트롤러 IP500', qty: 1 }, { location: 'korea', name: 'FR7 바디', qty: 10 }, { location: 'korea', name: 'FR7 렌즈', qty: 6 }, { location: 'korea', name: '미러리스 바디', qty: 6 }, { location: 'korea', name: '미러리스 렌즈 70-200mm', qty: 6 }, { location: 'korea', name: '삼각대', qty: 18 }, { location: 'korea', name: '삼각대 달리', qty: 4 }, { location: 'korea', name: '8k 스위처', qty: 1 }, { location: 'korea', name: 'FR7 POE', qty: 1 }, { location: 'korea', name: '티비로직 24인치 모니터', qty: 2 }, { location: 'korea', name: '티비로직 17인치 모니터', qty: 1 }, { location: 'korea', name: '소니 핸디캠', qty: 1 }, { location: 'korea', name: '드론', qty: 1 },
+            // 키프로스
+            { location: 'cyprus', name: 'FR7 바디', qty: 8 }, { location: 'cyprus', name: '4k 스위처', qty: 2 }, { location: 'cyprus', name: 'FR7 POE', qty: 1 }, { location: 'cyprus', name: 'V마운트 배터리', qty: 8 },
+            // 프라하
+            { location: 'prague', name: '짐벌', qty: 1 }, { location: 'prague', name: '소니 핸디캠', qty: 2 }, { location: 'prague', name: 'FR7 렌즈', qty: 12 }, { location: 'prague', name: '미러리스 바디', qty: 11 }, { location: 'prague', name: '미러리스 렌즈 24-70mm', qty: 6 }, { location: 'prague', name: '미러리스 렌즈 70-200mm', qty: 4 }, { location: 'prague', name: '미러리스 렌즈 16-35mm', qty: 1 }, { location: 'prague', name: '삼각대', qty: 15 }, { location: 'prague', name: '삼각대 달리', qty: 2 }, { location: 'prague', name: '테라덱 무선 송수신기', qty: 2 }, { location: 'prague', name: 'FR7 IP500', qty: 2 }
+        ];
 
-        const orgChartContainer = document.getElementById('org-chart');
-        const workflowMapContainer = document.getElementById('workflow-map');
-        const partnersGrid = document.getElementById('partners-grid');
-        const modalContainer = document.getElementById('modal-container');
-        const modalTitle = document.getElementById('modal-title');
-        const modalContent = document.getElementById('modal-content');
+        const moves = [
+            // Phase 1 Moves: Gather in Cyprus
+            { id: 'move1', phase: 1, from: 'korea', to: 'cyprus', type: 'direct', title: '한국 → 키프로스', items: [{ name: '티비로직 24인치 모니터', qty: 1 }, { name: '테라덱 무선 송수신기', qty: 2 }] },
+            { id: 'move2', phase: 1, from: 'prague', to: 'cyprus', type: 'direct', title: '프라하 → 키프로스 (직접)', items: [
+                { name: '미러리스 바디', qty: 5 }, { name: '미러리스 렌즈 24-70mm', qty: 5 }, { name: '미러리스 렌즈 70-200mm', qty: 1 }, { name: 'FR7 IP500', qty: 1 }, { name: '소니 핸디캠', qty: 1 }, { name: '테라덱 무선 송수신기', qty: 2 }, { name: 'FR7 렌즈', qty: 6 }
+            ]},
+            { id: 'move3', phase: 1, from: 'prague', to: 'cyprus', type: 'carnet', title: '프라하 → 키프로스 (까르네/유동)', items: [
+                { name: '짐벌', qty: 1 }, { name: '소니 핸디캠', qty: 1 }, { name: 'FR7 렌즈', qty: 6 }, { name: '미러리스 바디', qty: 6 }, { name: '미러리스 렌즈 24-70mm', qty: 1 }, { name: '미러리스 렌즈 70-200mm', qty: 3 }, { name: '미러리스 렌즈 16-35mm', qty: 1 }, { name: '삼각대', qty: 15 }, { name: '삼각대 달리', qty: 2 }, { name: 'FR7 IP500', qty: 1 }
+            ]},
+            
+            // Phase 2 Moves: Distribute to final locations
+            { id: 'move4', phase: 2, from: 'cyprus', to: 'korea', type: 'direct', title: '→ 한국 최종 배치', items: [
+                { name: 'FR7 바디', qty: 2 }, { name: 'FR7 렌즈', qty: 6 }, { name: '미러리스 바디', qty: 5 }, { name: '미러리스 렌즈 24-70mm', qty: 5 }, { name: '미러리스 렌즈 70-200mm', qty: 1 }, { name: '4k 스위처', qty: 1 }, { name: 'FR7 IP500', qty: 1 }, { name: '소니 핸디캠', qty: 1 }, { name: 'V마운트 배터리', qty: 4 }, { name: '짐벌', qty: 1 }, { name: '테라덱 무선 송수신기', qty: 4 }
+            ]},
+            { id: 'move5', phase: 2, from: 'cyprus', to: 'prague', type: 'direct', title: '→ 프라하 최종 배치', items: [
+                { name: 'FR7 바디', qty: 6 }, { name: '4k 스위처', qty: 1 }, { name: 'FR7 POE', qty: 1 }, { name: '티비로직 24인치 모니터', qty: 1 }, { name: 'V마운트 배터리', qty: 4 }
+            ]},
+            { id: 'move6', phase: 2, from: 'cyprus', to: 'prague', type: 'carnet', title: '→ 프라하 최종 배치', items: [
+                { name: '소니 핸디캠', qty: 1 }, { name: 'FR7 렌즈', qty: 6 }, { name: '미러리스 바디', qty: 6 }, { name: '미러리스 렌즈 24-70mm', qty: 1 }, { name: '미러리스 렌즈 70-200mm', qty: 3 }, { name: '미러리스 렌즈 16-35mm', qty: 1 }, { name: '삼각대', qty: 15 }, { name: '삼각대 달리', qty: 2 }, { name: 'FR7 IP500', qty: 1 }
+            ]}
+        ];
 
-        function renderOrgChart() {
-            orgChartContainer.innerHTML = '';
-            projectData.orgChart.forEach(member => {
-                const item = document.createElement('div');
-                item.className = 'org-item border border-slate-200 rounded-lg p-4 cursor-pointer hover:bg-slate-50';
-                item.innerHTML = `
-                    <div class="flex justify-between items-center">
-                        <div>
-                            <p class="font-bold text-sky-600">${member.role}</p>
-                            <p class="text-lg text-slate-800">${member.name}</p>
-                        </div>
-                        <span class="text-2xl text-slate-400 transform transition-transform duration-300">+</span>
-                    </div>
-                    <div class="org-item-details text-sm text-slate-500 pt-2 mt-2 border-t border-slate-200">
-                        ${member.details}
-                    </div>
-                `;
-                item.onclick = () => toggleOrgItem(item);
-                orgChartContainer.appendChild(item);
-            });
-        }
+        let currentStep = 0;
+        const locationMap = { 'korea': '🇰🇷 한국', 'cyprus': '🇨🇾 키프로스', 'prague': '🇨🇿 프라하' };
+        
+        const inventories = {};
 
-        function toggleOrgItem(item) {
-            const details = item.querySelector('.org-item-details');
-            const icon = item.querySelector('span');
-            if (details.style.maxHeight && details.style.maxHeight !== '0px') {
-                details.style.maxHeight = '0px';
-                icon.style.transform = 'rotate(0deg)';
-            } else {
-                details.style.maxHeight = details.scrollHeight + 'px';
-                icon.style.transform = 'rotate(45deg)';
-            }
-        }
-
-        function renderWorkflows() {
-            const groups = {};
-            projectData.workflows.forEach(wf => {
-                if (!groups[wf.group]) {
-                    groups[wf.group] = [];
-                }
-                groups[wf.group].push(wf);
+        function calculateInventories() {
+            inventories[0] = { korea: {}, cyprus: {}, prague: {} };
+            initialInventoryData.forEach(item => {
+                inventories[0][item.location][item.name] = (inventories[0][item.location][item.name] || 0) + item.qty;
             });
 
-            workflowMapContainer.innerHTML = '';
-            for (const groupName in groups) {
-                const groupContainer = document.createElement('div');
-                groupContainer.className = 'space-y-4';
-                
-                const groupTitle = document.createElement('h3');
-                groupTitle.className = 'text-lg font-semibold text-center text-slate-600';
-                groupTitle.textContent = groupName;
-                groupContainer.appendChild(groupTitle);
-                
-                groups[groupName].forEach(wf => {
-                    const card = document.createElement('div');
-                    card.className = `op-map-node dashboard-card rounded-lg shadow-md cursor-pointer flex items-center p-4 border-l-4 border-${wf.color}-500`;
-                    card.innerHTML = `
-                        <div class="text-3xl mr-4">${wf.icon}</div>
-                        <div>
-                            <h4 class="font-bold text-slate-800">${wf.title}</h4>
-                            <p class="text-slate-500 text-xs">${wf.description}</p>
-                        </div>
-                    `;
-                    card.onclick = () => openModal(wf);
-                    groupContainer.appendChild(card);
+            const phase1Moves = moves.filter(m => m.phase === 1);
+            inventories[1] = calculateNextState(inventories[0], phase1Moves);
+
+            const phase2Moves = moves.filter(m => m.phase === 2);
+            inventories[2] = calculateNextState(inventories[1], phase2Moves);
+        }
+
+        function calculateNextState(prevState, currentMoves) {
+            const nextState = JSON.parse(JSON.stringify(prevState)); 
+            currentMoves.forEach(move => {
+                move.items.forEach(item => {
+                    if (nextState[move.from] && nextState[move.from][item.name]) {
+                        nextState[move.from][item.name] -= item.qty;
+                        if (nextState[move.from][item.name] <= 0) {
+                            delete nextState[move.from][item.name];
+                        }
+                    }
+                    nextState[move.to] = nextState[move.to] || {};
+                    nextState[move.to][item.name] = (nextState[move.to][item.name] || 0) + item.qty;
                 });
-                workflowMapContainer.appendChild(groupContainer);
+            });
+            return nextState;
+        }
+
+        function createCard(data, isMobile = false, movedItemsMap = new Map()) {
+            const card = document.createElement('div');
+            
+            if (data.type) { // It's a move card
+                card.id = data.id;
+                let typeClass = data.type === 'carnet' ? 'border-l-amber-400' : 'border-l-blue-500';
+                let icon = data.type === 'carnet' ? '📄' : '✈️';
+                let typeText = data.type === 'carnet' ? '까르네' : '직접이동';
+                card.className = `logistics-card bg-white p-4 rounded-lg shadow-xl border-l-4 ${typeClass} relative z-10`;
+                let pathHtml = isMobile ? `<p class="font-bold text-gray-700 mb-2">${locationMap[data.from]} → ${locationMap[data.to]}</p>` : '';
+                card.innerHTML = `
+                    <div class="flex justify-between items-start"><p class="font-bold text-base mb-2">${data.title}</p><p class="text-xs text-gray-500 mt-1 flex-shrink-0 ml-2">${icon} ${typeText}</p></div>
+                    ${pathHtml}
+                    <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">${data.items.map(item => `<li>${item.name}: ${item.qty}</li>`).join('')}</ul>`;
+            } else { // It's an inventory card
+                card.className = 'logistics-card bg-white p-4 rounded-lg shadow-md border-l-4 border-l-slate-400';
+                const itemsList = Object.keys(data).length > 0 
+                    ? Object.entries(data).sort((a, b) => a[0].localeCompare(b[0])).map(([name, qty]) => {
+                        const movedQty = movedItemsMap.get(name);
+                        let content;
+                        if (movedQty > 0) {
+                            const remainingQty = qty - movedQty;
+                            content = `<span class="highlight-item">${name}: ${qty} → ${remainingQty}</span>`;
+                        } else {
+                            content = `${name}: ${qty}`;
+                        }
+                        return `<li>${content}</li>`;
+                    }).join('') 
+                    : '';
+                card.innerHTML = `<ul class="list-disc list-inside text-sm text-gray-600 space-y-1">${itemsList}</ul>`;
             }
+            return card;
+        }
+
+        function renderDesktopView(step) {
+            document.querySelectorAll('#logistics-board .space-y-4').forEach(col => col.innerHTML = '');
+            document.getElementById('line-container').innerHTML = '';
+
+            if (step % 2 === 0) { // State view (0, 2, 4)
+                const inventory = inventories[step / 2];
+                Object.keys(inventory).forEach(loc => {
+                    if (step === 4 && loc === 'cyprus') return;
+                    
+                    let inventoryToDisplay = inventory[loc];
+                    if (step === 4 && loc === 'korea') {
+                        inventoryToDisplay = filterFloatingInventory(inventory[loc])[0];
+                    }
+
+                    const card = createCard(inventoryToDisplay);
+                    if(card.querySelector('li')) {
+                        document.querySelector(`#col-${loc} > .space-y-4`).appendChild(card);
+                    }
+                });
+                if(step === 4) addFinalSummaries();
+
+            } else { // Movement view (1, 3)
+                const phase = Math.ceil(step / 2);
+                const prevInventory = inventories[phase - 1];
+                const phaseMoves = moves.filter(m => m.phase === phase);
+                
+                Object.keys(prevInventory).forEach(loc => {
+                    if ((phase === 1 && loc === 'prague') || (phase === 2 && loc === 'cyprus')) {
+                         // Don't show background card if location is being emptied
+                    } else {
+                        const movedItemsFromLoc = new Map();
+                        phaseMoves.filter(m => m.from === loc).forEach(move => {
+                            move.items.forEach(item => {
+                                movedItemsFromLoc.set(item.name, (movedItemsFromLoc.get(item.name) || 0) + item.qty);
+                            });
+                        });
+                        const card = createCard(prevInventory[loc], false, movedItemsFromLoc);
+                        if(card.querySelector('li')) {
+                            card.classList.add('opacity-50');
+                            document.querySelector(`#col-${loc} > .space-y-4`).appendChild(card);
+                        }
+                    }
+                });
+
+                phaseMoves.forEach(move => {
+                    const card = createCard(move);
+                    document.querySelector(`#col-${move.from} > .space-y-4`).appendChild(card);
+                });
+                setTimeout(() => drawAllLines(phase), 100);
+            }
+        }
+
+        function renderMobileView(step) {
+            const mobileContainer = document.getElementById('mobile-logistics-view');
+            mobileContainer.innerHTML = '';
+            if (step % 2 === 0) { // State view
+                const inventory = inventories[step / 2];
+                Object.keys(inventory).forEach(loc => {
+                    if (step === 4 && loc === 'cyprus') return;
+                    let inventoryToDisplay = inventory[loc];
+                    let floatingInventory = {};
+                    if (step === 4 && loc === 'korea') {
+                        [inventoryToDisplay, floatingInventory] = filterFloatingInventory(inventory[loc]);
+                    }
+
+                    const wrapper = document.createElement('div');
+                    wrapper.innerHTML = `<h3 class="text-xl font-bold mb-2">${locationMap[loc]}</h3>`;
+                    const card = createCard(inventoryToDisplay);
+                    if(card.querySelector('li')) {
+                        wrapper.appendChild(card);
+                        mobileContainer.appendChild(wrapper);
+                    }
+                     if (step === 4 && loc === 'korea' && Object.keys(floatingInventory).length > 0) {
+                        const floatingCard = createFloatingInventoryCard(floatingInventory);
+                        wrapper.appendChild(floatingCard);
+                    }
+                });
+                if(step === 4) addFinalSummaries(true);
+            } else { // Movement view
+                const phase = Math.ceil(step / 2);
+                const phaseMoves = moves.filter(m => m.phase === phase);
+                phaseMoves.forEach(move => {
+                    const card = createCard(move, true);
+                    mobileContainer.appendChild(card);
+                });
+            }
+        }
+
+        function createSetBreakdownCard() {
+            const breakdown = [
+                'FR7 바디 / 렌즈: 6', '미러리스 바디: 3', '미러리스 렌즈 24-70mm: 1', '미러리스 렌즈 70-200mm: 2',
+                '삼각대: 8', '소니 핸디캠: 1', 'FR7 POE: 1', '스위처: 1', '테라덱 무선 송수신기: 2set'
+            ];
+            const card = document.createElement('div');
+            card.className = 'mt-2 p-3 bg-slate-100 border-t-2 border-slate-200 rounded-b-lg text-left';
+            card.innerHTML = `<p class="text-xs font-bold text-slate-600 mb-1">[참고] 1세트 구성품</p>
+                              <ul class="grid grid-cols-1 gap-x-4 text-xs text-slate-500">
+                                ${breakdown.map(item => `<li>- ${item}</li>`).join('')}
+                              </ul>`;
+            return card;
+        }
+
+        function filterFloatingInventory(inventory) {
+            const floatingItemsList = ['짐벌', '드론', '테라덱 무선 송수신기'];
+            const mainInventory = {};
+            const floatingInventory = {};
+
+            for (const item in inventory) {
+                if (item === '테라덱 무선 송수신기') {
+                    const totalQty = inventory[item];
+                    if (totalQty > 2) {
+                        mainInventory[item] = 2; // Fixed part
+                        floatingInventory[item] = totalQty - 2; // Floating part
+                    } else {
+                        mainInventory[item] = totalQty;
+                    }
+                } else if (floatingItemsList.includes(item)) {
+                    floatingInventory[item] = inventory[item];
+                } else {
+                    mainInventory[item] = inventory[item];
+                }
+            }
+            return [mainInventory, floatingInventory];
+        }
+
+        function createFloatingInventoryCard(floatingInventory) {
+             const card = document.createElement('div');
+             card.className = 'mt-4 p-4 bg-purple-100 text-purple-800 rounded-lg';
+             card.innerHTML = `<p class="font-bold text-center mb-2">📦 유동 물량</p>
+                               <ul class="list-disc list-inside text-sm">${Object.entries(floatingInventory).map(([name, qty]) => `<li>${name}: ${qty}</li>`).join('')}</ul>`;
+            return card;
+        }
+
+        function addFinalSummaries(isMobile = false) {
+            const summaries = [
+                { loc: 'korea', text: '포커 테이블 2 Set' },
+                { loc: 'prague', text: '포커 테이블 1 Set' }
+            ];
+            
+            // Floating inventory for Korea
+            const [_, floatingInventory] = filterFloatingInventory(inventories[2].korea);
+            if (Object.keys(floatingInventory).length > 0) {
+                const floatingCard = createFloatingInventoryCard(floatingInventory);
+                if (isMobile) {
+                    const parent = Array.from(document.querySelector('#mobile-logistics-view').children).find(child => child.querySelector('h3')?.textContent.includes(locationMap['korea']));
+                    if(parent) parent.appendChild(floatingCard);
+                } else {
+                    document.querySelector(`#col-korea > .space-y-4`).appendChild(floatingCard);
+                }
+            }
+
+            summaries.forEach(s => {
+                const summaryEl = document.createElement('div');
+                summaryEl.className = 'mt-4 p-4 bg-blue-100 text-blue-800 rounded-lg text-center font-bold flex items-center justify-center gap-2';
+                summaryEl.innerHTML = `<span>🃏</span><span>${s.text}</span>`;
+                
+                if (s.loc === 'korea') {
+                    const breakdownCard = createSetBreakdownCard();
+                    summaryEl.appendChild(breakdownCard);
+                    summaryEl.classList.remove('items-center');
+                    summaryEl.classList.add('flex-col');
+                }
+
+                if (isMobile) {
+                   const parent = Array.from(document.querySelector('#mobile-logistics-view').children).find(child => child.querySelector('h3')?.textContent.includes(locationMap[s.loc]));
+                   if(parent) parent.appendChild(summaryEl);
+                } else {
+                    document.querySelector(`#col-${s.loc} > .space-y-4`).appendChild(summaryEl);
+                }
+            });
+        }
+
+
+        function showStep(step) {
+            if (currentStep === step && step !== 0) return;
+            currentStep = step;
+
+            if (window.innerWidth < 768) {
+                renderMobileView(step);
+            } else {
+                renderDesktopView(step);
+            }
+
+            document.querySelectorAll('.step').forEach((el, i) => {
+                el.classList.toggle('active', i === step);
+            });
         }
         
-        function renderPartners() {
-            partnersGrid.innerHTML = ''; 
-            projectData.partners.forEach(p => {
-                const card = document.createElement('div');
-                card.className = 'dashboard-card rounded-xl shadow-lg p-6';
-                card.innerHTML = `
-                    <h3 class="font-bold text-xl text-slate-900">${p.name}</h3>
-                    <p class="text-sky-600 font-semibold text-sm mb-2">${p.role}</p>
-                    <p class="text-slate-600 text-sm">${p.details}</p>
-                `;
-                partnersGrid.appendChild(card);
+        function drawAllLines(phase) {
+            const lineContainer = document.getElementById('line-container');
+            if (!lineContainer) return;
+            lineContainer.innerHTML = ''; 
+
+            const movesInPhase = moves.filter(m => m.phase === phase);
+            movesInPhase.forEach(move => {
+                const fromCard = document.getElementById(move.id);
+                const toCol = document.getElementById(`col-${move.to}`);
+                if (!fromCard || !toCol || move.from === move.to) return;
+
+                const startRect = fromCard.getBoundingClientRect();
+                const endRect = toCol.getBoundingClientRect();
+                let startX = (startRect.left < endRect.left) ? startRect.right : startRect.left;
+                let endX = (startRect.left < endRect.left) ? endRect.left : endRect.right;
+                const startY = startRect.top + startRect.height / 2;
+                const endY = endRect.top + endRect.height / 2;
+
+                const distance = Math.hypot(endX - startX, endY - startY);
+                const angle = Math.atan2(endY - startY, endX - startX);
+
+                const line = document.createElement('div');
+                line.className = 'line-connector';
+                line.style.width = `${distance}px`;
+                line.style.left = `${startX}px`;
+                line.style.top = `${startY}px`;
+                line.style.transform = `rotate(${angle}rad)`;
+                lineContainer.appendChild(line);
             });
         }
-
-        function openModal(workflow) {
-            modalTitle.textContent = workflow.title;
-            modalContent.innerHTML = workflow.details;
-            modalContainer.classList.add('active');
-
-            if (workflow.id === 'sub_feature') {
-                const tabs = modalContent.querySelectorAll('.detail-tab');
-                const contents = modalContent.querySelectorAll('.detail-content');
-                tabs.forEach(tab => {
-                    tab.addEventListener('click', (e) => {
-                        const targetId = e.target.dataset.target;
-                        
-                        tabs.forEach(t => t.classList.remove('active'));
-                        e.target.classList.add('active');
-
-                        contents.forEach(c => {
-                            c.classList.remove('active');
-                            if (c.id === targetId) {
-                                c.classList.add('active');
-                            }
-                        });
-                    });
-                });
-            }
-        }
-
-        function closeModal() {
-            modalContainer.classList.remove('active');
+        
+        function handleResize() {
+            showStep(currentStep);
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            renderOrgChart();
-            renderWorkflows();
-            renderPartners();
+            calculateInventories();
+            showStep(0);
+            window.addEventListener('resize', handleResize);
         });
-
     </script>
 </body>
 </html>
+
